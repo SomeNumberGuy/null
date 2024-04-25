@@ -118,3 +118,76 @@ train_model(model_ft, criterion, optimizer_ft, scheduler)
 
 # Save the entire model
 torch.save(model_ft.state_dict(), 'model.pth')
+
+import torch.nn as nn
+from sklearn.model_selection import KFold
+
+# Define your model architecture
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        # ... define layers ...
+
+    def forward(self, x):
+        # ... implement forward pass ...
+
+# Initialize the model and device
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+model_ft = Model()
+model_ft.to(device)
+
+# Define K-Fold Cross Validation parameters
+kfold = KFold(n_splits=5, shuffle=True)
+
+# Define a function to train and evaluate a model on a single fold
+def train_and_evaluate_on_fold(fold_indices):
+    X_train, X_val = data[fold_indices[0]], data[fold_indices[1]]
+    y_train, y_val = labels[fold_indices[0]], labels[fold_indices[1]]
+
+    # Create DataLoaders for the training and validation sets
+    train_loader = torch.utils.data.DataLoader((X_train, y_train), batch_size=batch_size, shuffle=True)
+    val_loader = torch.utils.data.DataLoader((X_val, y_val), batch_size=batch_size, shuffle=False)
+
+    # Train and evaluate the model on this fold
+    for phase in ['train', 'val']:
+        if phase == 'train':
+            model_ft.train()
+        else:
+            model_ft.eval()
+
+        running_loss = 0.0
+        running_corrects = 0
+
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model_ft(inputs)
+            _, preds = torch.max(outputs, 1)
+            loss = criterion(outputs, labels)
+
+            if phase == 'train':
+                loss.backward()
+                optimizer.step()
+
+            running_loss += loss.item() * inputs.size(0)
+            running_corrects += (preds == labels).sum().item()
+
+        epoch_loss = running_loss / len(y_train)
+        epoch_acc = running_corrects / len(y_train)
+
+        print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+
+    return epoch_loss, epoch_acc
+
+# Train and evaluate the model on each fold
+accuracy_scores = []
+for train_index, val_index in kfold.split(data):
+    X_train, X_val = data[train_index], data[val_index]
+    y_train, y_val = labels[train_index], labels[val_index]
+
+    # Create DataLoaders for the training and validation sets
+    train_loader = torch.utils.data.DataLoader((X_train, y_train), batch_size=batch_size, shuffle=True)
+    val_loader = torch.utils.data.DataLoader((X_val, y_val), batch_size=batch_size, shuffle=False)
+
+    epoch_loss, epoch_acc = train_and_evaluate_on_fold((train_index, val_index))
+    accuracy_scores.append(epoch_acc)
